@@ -61,6 +61,14 @@ func normalize_content_sort(sort_by, sort_order string) (string, string, error) 
 	return sort_by, sort_order, nil
 }
 
+// ValidateContentSort validates public API sort parameters without exposing
+// the normalized values. ListContentsRanked performs the same validation again
+// so non-HTTP callers remain protected too.
+func ValidateContentSort(sort_by, sort_order string) error {
+	_, _, err := normalize_content_sort(sort_by, sort_order)
+	return err
+}
+
 func content_order_clause(sort_by, sort_order string) string {
 	direction := "DESC"
 	if sort_order == ContentSortOrderAsc {
