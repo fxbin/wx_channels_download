@@ -188,6 +188,7 @@
       last_buffer: "",
       has_more: true,
       loading: false,
+      loading_all: false,
       downloading: false,
       sort: "newest",
       min_likes: "",
@@ -268,18 +269,21 @@
     var status = create_element("span", "");
     status.style.cssText = "flex:1;color:#86909c;font-size:12px;";
     var load_more_btn = create_element("button", "加载更多");
+    var load_all_btn = create_element("button", "加载全部");
     var download_btn = create_element("button", "下载选中 0");
-    [load_more_btn, download_btn].forEach((button) => {
+    [load_more_btn, load_all_btn, download_btn].forEach((button) => {
       button.type = "button";
       button.style.cssText =
         "height:36px;border-radius:7px;padding:0 16px;cursor:pointer;font-weight:500;";
     });
-    load_more_btn.style.border = "1px solid #d9d9d9";
-    load_more_btn.style.background = "#fff";
+    [load_more_btn, load_all_btn].forEach((button) => {
+      button.style.border = "1px solid #d9d9d9";
+      button.style.background = "#fff";
+    });
     download_btn.style.border = "1px solid #07c160";
     download_btn.style.background = "#07c160";
     download_btn.style.color = "#fff";
-    footer.append(status, load_more_btn, download_btn);
+    footer.append(status, load_more_btn, load_all_btn, download_btn);
     panel.appendChild(footer);
 
     function filtered_feeds() {
@@ -313,17 +317,25 @@
     }
 
     function update_summary(visible_count) {
-      summary.textContent = `已加载 ${state.feeds.length} · 当前结果 ${visible_count} · 已选 ${state.selected.size}`;
+      var load_scope = state.has_more ? "还有更多" : "已全部加载";
+      summary.textContent = `已加载 ${state.feeds.length} · 当前结果 ${visible_count} · 已选 ${state.selected.size} · ${load_scope}`;
       download_btn.textContent = `下载选中 ${state.selected.size}`;
       download_btn.disabled = state.selected.size === 0 || state.downloading;
       download_btn.style.opacity = download_btn.disabled ? ".55" : "1";
-      load_more_btn.disabled = state.loading || !state.has_more;
+      load_more_btn.disabled = state.loading || state.loading_all || !state.has_more;
       load_more_btn.textContent = state.loading
         ? "加载中..."
         : state.has_more
           ? "加载更多"
           : "已全部加载";
       load_more_btn.style.opacity = load_more_btn.disabled ? ".55" : "1";
+      load_all_btn.disabled = state.loading || state.loading_all || !state.has_more;
+      load_all_btn.textContent = state.loading_all
+        ? "加载全部中..."
+        : state.has_more
+          ? "加载全部"
+          : "已全部加载";
+      load_all_btn.style.opacity = load_all_btn.disabled ? ".55" : "1";
     }
 
     function render() {
@@ -414,11 +426,12 @@
 
     async function load_more() {
       if (state.loading || !state.has_more) {
-        return;
+        return 0;
       }
       state.loading = true;
       status.textContent = "正在读取视频号主页数据...";
       update_summary(filtered_feeds().length);
+      var previous_buffer = state.last_buffer;
       try {
         var payload = {
           username,
@@ -440,21 +453,50 @@
             state.feeds.push(feed);
           }
         });
-        state.last_buffer = (r.data && r.data.lastBuffer) || "";
-        state.has_more = Boolean(state.last_buffer) && incoming.length >= 15;
+        var next_buffer = (r.data && r.data.lastBuffer) || "";
+        state.last_buffer = next_buffer;
+        state.has_more =
+          Boolean(next_buffer) && next_buffer !== previous_buffer && incoming.length > 0;
         status.textContent = incoming.length
           ? `本次读取 ${incoming.length} 条作品`
           : "没有更多作品";
+        return incoming.length;
       } catch (error) {
-        state.has_more = false;
         status.textContent = error.message || "读取作品失败";
         WXU.error({
           source: "channels.profile.js:load_more",
           msg: error.message || "读取作品失败",
           alert: 0,
         });
+        return -1;
       } finally {
         state.loading = false;
+        render();
+      }
+    }
+
+    async function load_all() {
+      if (state.loading || state.loading_all || !state.has_more) {
+        return;
+      }
+      state.loading_all = true;
+      var start_count = state.feeds.length;
+      var failed = false;
+      status.textContent = "正在加载该账号全部作品，用于完整排序/筛选...";
+      update_summary(filtered_feeds().length);
+      try {
+        while (state.has_more) {
+          var count = await load_more();
+          if (count < 0) {
+            failed = true;
+            break;
+          }
+        }
+        if (!failed) {
+          status.textContent = `已加载全部作品，本次新增 ${state.feeds.length - start_count} 条`;
+        }
+      } finally {
+        state.loading_all = false;
         render();
       }
     }
@@ -482,6 +524,9 @@
     };
     load_more_btn.onclick = () => {
       load_more();
+    };
+    load_all_btn.onclick = () => {
+      load_all();
     };
     close_btn.onclick = () => {
       overlay.remove();
