@@ -84,6 +84,26 @@ func TestEngagementMetricsPreferObjectFavInfo(t *testing.T) {
 	}
 }
 
+func TestEngagementMetricsIgnoreCommentLevelLikes(t *testing.T) {
+	raw := json.RawMessage(`{
+		"data": {
+			"object": {"id": "feed-1"},
+			"commentCount": 2,
+			"commentInfo": [
+				{"id": "comment-1", "likeCount": 9999},
+				{"id": "comment-2", "likeCount": 8888}
+			]
+		}
+	}`)
+	metrics := engagement_metrics_from_fetch(raw)
+	if metrics.Like.Present {
+		t.Fatalf("comment like counter must not become feed likes: %+v", metrics.Like)
+	}
+	if !metrics.Comment.Present || metrics.Comment.Value != 2 {
+		t.Fatalf("unexpected comment metric: %+v", metrics.Comment)
+	}
+}
+
 func TestApplyEngagementMetricsMarksObservedZero(t *testing.T) {
 	content := &model.Content{Metadata: `{"key":"decode-key"}`}
 	apply_engagement_metrics(content, engagement_metrics{
