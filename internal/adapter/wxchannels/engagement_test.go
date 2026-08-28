@@ -32,6 +32,43 @@ func TestParseEngagementCountString(t *testing.T) {
 	}
 }
 
+func TestEngagementMetricsFromNativeProfileFeed(t *testing.T) {
+	raw := json.RawMessage(`{
+		"id": "feed-1",
+		"likeCount": 1234,
+		"commentCount": 56,
+		"forwardCount": 78,
+		"favCount": 90
+	}`)
+	metrics := engagement_metrics_from_fetch(raw)
+	if !metrics.Like.Present || metrics.Like.Value != 1234 {
+		t.Fatalf("unexpected like metric: %+v", metrics.Like)
+	}
+	if !metrics.Comment.Present || metrics.Comment.Value != 56 {
+		t.Fatalf("unexpected comment metric: %+v", metrics.Comment)
+	}
+	if !metrics.Share.Present || metrics.Share.Value != 78 {
+		t.Fatalf("unexpected share metric: %+v", metrics.Share)
+	}
+	if !metrics.Collect.Present || metrics.Collect.Value != 90 {
+		t.Fatalf("unexpected collect metric: %+v", metrics.Collect)
+	}
+}
+
+func TestEngagementMetricsMissingNativeMetricStaysUnknown(t *testing.T) {
+	raw := json.RawMessage(`{
+		"id": "feed-1",
+		"likeCount": 0
+	}`)
+	metrics := engagement_metrics_from_fetch(raw)
+	if !metrics.Like.Present || metrics.Like.Value != 0 {
+		t.Fatalf("explicit zero like count must stay observed: %+v", metrics.Like)
+	}
+	if metrics.Comment.Present || metrics.Share.Present || metrics.Collect.Present {
+		t.Fatalf("missing metrics must remain unknown: %+v", metrics)
+	}
+}
+
 func TestEngagementMetricsFromSharedFeed(t *testing.T) {
 	raw := json.RawMessage(`{
 		"data": {
