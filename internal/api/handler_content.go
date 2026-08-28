@@ -99,6 +99,10 @@ func (c *APIClient) handle_content_list_with_type(ctx *gin.Context, force_conten
 	if body.SortOrder != nil {
 		sort_order = strings.TrimSpace(*body.SortOrder)
 	}
+	if err := services.ValidateContentSort(sort_by, sort_order); err != nil {
+		result.Err(ctx, 400, err.Error())
+		return
+	}
 
 	page_result, err := c.content_service.ListContentsRanked(services.ContentRankedListOptions{
 		ContentListOptions: services.ContentListOptions{
@@ -117,7 +121,7 @@ func (c *APIClient) handle_content_list_with_type(ctx *gin.Context, force_conten
 		SortOrder:    sort_order,
 	})
 	if err != nil {
-		result.Err(ctx, 400, err.Error())
+		result.Err(ctx, 500, err.Error())
 		return
 	}
 	result.Ok(ctx, page_result)
