@@ -3,6 +3,8 @@ package wxchannelsadapter
 import (
 	"encoding/json"
 	"testing"
+
+	"wx_channel/internal/database/model"
 )
 
 func TestParseEngagementCountString(t *testing.T) {
@@ -79,5 +81,27 @@ func TestEngagementMetricsPreferObjectFavInfo(t *testing.T) {
 	}
 	if metrics.Comment.Value != 123 || !metrics.Comment.Present {
 		t.Fatalf("unexpected comment metric: %+v", metrics.Comment)
+	}
+}
+
+func TestApplyEngagementMetricsMarksObservedZero(t *testing.T) {
+	content := &model.Content{Metadata: `{"key":"decode-key"}`}
+	apply_engagement_metrics(content, engagement_metrics{
+		Like:    engagement_metric{Value: 0, Present: true},
+		Comment: engagement_metric{Value: 12, Present: true},
+	})
+	if content.LikeCount != 0 || content.CommentCount != 12 {
+		t.Fatalf("unexpected counters: like=%d comment=%d", content.LikeCount, content.CommentCount)
+	}
+	var metadata map[string]any
+	if err := json.Unmarshal([]byte(content.Metadata), &metadata); err != nil {
+		t.Fatalf("decode metadata: %v", err)
+	}
+	if metadata["key"] != "decode-key" {
+		t.Fatalf("existing metadata was lost: %+v", metadata)
+	}
+	observed, ok := metadata[model.ContentMetadataEngagementObservedKey].([]any)
+	if !ok || len(observed) != 2 || observed[0] != "like" || observed[1] != "comment" {
+		t.Fatalf("unexpected observed metadata: %+v", metadata[model.ContentMetadataEngagementObservedKey])
 	}
 }
