@@ -102,7 +102,6 @@ func (c *APIClient) SetupRoutes() {
 	c.engine.GET("/api/content/list", c.handle_content_list)
 	c.engine.GET("/api/content/detail", c.handle_content_detail)
 	c.engine.GET("/api/content/relations", c.handle_content_relations)
-	c.engine.POST("/api/content/download", c.handle_content_batch_download)
 	// Other endpoints
 	c.engine.GET("/api/logs", c.handle_logs)
 	c.engine.POST("/api/logs/clear", c.handle_clear_logs)

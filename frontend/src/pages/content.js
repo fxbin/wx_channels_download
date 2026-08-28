@@ -57,7 +57,6 @@ function ContentPageView(props) {
           });
         },
       }),
-      ContentSelectionBar({ store: vm$ }),
       ContentDetailDrawer({
         store: vm$,
         app: props.app,
@@ -122,24 +121,6 @@ function ContentPageToolbar(props) {
             },
           }),
         ]),
-        Select({
-          store: vm$.ui.select_sort$,
-          class: "wx-content-filter-select",
-          attributes: { "aria-label": "内容排序" },
-        }),
-        Input({
-          store: vm$.ui.input_min_like_count$,
-          class: "wx-content-filter-select",
-          style: { width: "120px" },
-          attributes: {
-            name: "min_like_count",
-            type: "number",
-            min: "0",
-            step: "1",
-            inputmode: "numeric",
-            "aria-label": "最低点赞数",
-          },
-        }),
         View(
           {
             class: "wx-content-scope-toggle",
@@ -172,12 +153,17 @@ function ContentPageToolbar(props) {
             ),
           ],
         ),
+        // Select({
+        //   store: vm$.ui.select_content_type$,
+        //   class: "wx-content-type-select wx-content-filter-select",
+        //   attributes: { "aria-label": "筛选内容类型" },
+        // }),
       ]),
       View({ class: "wx-content-filter-actions" }, [
         ContentPageActionButton({
           store: vm$.ui.btn_search$,
           icon: "search",
-          label: "筛选",
+          label: "搜索",
           variant: "primary",
           attributes: { type: "submit" },
           onClick(event) {
@@ -188,80 +174,11 @@ function ContentPageToolbar(props) {
         ContentPageActionButton({
           store: vm$.ui.btn_refresh$,
           icon: "rotate-ccw",
-          label: "刷新",
+          label: "重置",
         }),
       ]),
     ],
   );
-}
-
-function ContentSelectionBar(props) {
-  const vm$ = props.store;
-  return Show({
-    when: vm$.state.selection_visible,
-    ok() {
-      return View(
-        {
-          class: "wx-dl-page-selection-bar",
-          attributes: {
-            role: "toolbar",
-            "aria-label": "选中内容操作",
-          },
-        },
-        [
-          View({ class: "wx-dl-page-selection-summary" }, [
-            computed(
-              vm$.state.selected_content_count,
-              (count) => `已选中 ${count} 条内容`,
-            ),
-            Show({
-              when: vm$.state.batch_download_message,
-              ok() {
-                return View(
-                  {
-                    style: {
-                      "margin-left": "12px",
-                      color: "var(--dm-color-text-secondary)",
-                      "font-size": "12px",
-                    },
-                  },
-                  [vm$.state.batch_download_message],
-                );
-              },
-            }),
-            Show({
-              when: vm$.state.batch_download_error,
-              ok() {
-                return View(
-                  {
-                    style: {
-                      "margin-left": "12px",
-                      color: "var(--dm-color-danger-text)",
-                      "font-size": "12px",
-                    },
-                  },
-                  [vm$.state.batch_download_error],
-                );
-              },
-            }),
-          ]),
-          ContentPageActionButton({
-            store: vm$.ui.btn_clear_selection$,
-            icon: "x",
-            label: "清除选择",
-          }),
-          ContentPageActionButton({
-            store: vm$.ui.btn_download_selected$,
-            icon: "download",
-            label: computed(
-              vm$.state.selected_content_count,
-              (count) => `下载选中 ${count}`,
-            ),
-          }),
-        ],
-      );
-    },
-  });
 }
 
 function content_cover_url(content) {
@@ -335,42 +252,12 @@ function ContentRowAccounts(props) {
   ];
 }
 
-function ContentRowEngagement(props) {
-  const vm$ = props.store;
-  const content = props.content;
-  const items = [
-    { key: "likes", label: "赞", value: content.like_count },
-    { key: "comments", label: "评论", value: content.comment_count },
-    { key: "shares", label: "转发", value: content.share_count },
-    { key: "collects", label: "收藏", value: content.collect_count },
-  ].filter((item, index) => item.value > 0 || index < 2);
-  return [
-    For({
-      each: items,
-      render(item) {
-        return View(
-          {
-            class: `wx-content-row-stat wx-content-row-stat-${item.key}`,
-            attributes: { title: `${item.label}：${item.value || 0}` },
-          },
-          [
-            View({ class: "wx-content-row-stat-value" }, [
-              vm$.methods.formatCount(item.value),
-            ]),
-            View({ class: "wx-content-row-stat-label" }, [item.label]),
-          ],
-        );
-      },
-    }),
-  ];
-}
-
 function ContentRowStatistics(props) {
   const statistics = props.statistics;
   const items = [
     { key: "in-progress", label: "进行中任务", value: statistics.in_progress },
     { key: "failed", label: "失败任务", value: statistics.failed },
-    { key: "success", label: "任务", value: statistics.total_tasks },
+    { key: "success", label: "成功任务", value: statistics.total_tasks },
     { key: "files", label: "文件", value: statistics.files },
   ].filter((item) => item.value > 0);
   return [
@@ -460,18 +347,6 @@ function ContentSkeletonRow() {
     [
       View(
         {
-          class: "wx-table-selection-cell",
-          attributes: { n: "content-table-skeleton-selection", role: "cell" },
-        },
-        [
-          View({
-            class: "wx-content-skeleton",
-            style: { width: "18px", height: "18px", "border-radius": "4px" },
-          }),
-        ],
-      ),
-      View(
-        {
           class: "wx-content-row-main-cell",
           attributes: { n: "content-table-skeleton-main-cell", role: "cell" },
         },
@@ -508,10 +383,6 @@ function ContentSkeletonRow() {
           n: "content-table-skeleton-publish-time",
           role: "cell",
         },
-      }),
-      View({
-        class: "wx-content-skeleton wx-content-skeleton-line-short",
-        attributes: { n: "content-table-skeleton-engagement", role: "cell" },
       }),
       View({
         class: "wx-content-skeleton wx-content-skeleton-line-short",
@@ -559,16 +430,8 @@ function ContentPageBody(props) {
         },
       },
       {
-        name: "engagement",
-        title: "互动",
-        cellClass: "wx-content-row-stats",
-        render(content) {
-          return ContentRowEngagement({ store: vm$, content });
-        },
-      },
-      {
         name: "statistics",
-        title: "下载",
+        title: "统计",
         cellClass: "wx-content-row-stats",
         render(content) {
           return ContentRowStatistics({
@@ -578,29 +441,11 @@ function ContentPageBody(props) {
       },
     ],
     rows: vm$.state.contents,
-    rowKey(content) {
-      return content.id;
-    },
     status: vm$.state.status,
     loading: vm$.state.loading,
     error: vm$.state.error,
     skeletonCount: 8,
     renderSkeletonRow: ContentSkeletonRow,
-    rowSelection: {
-      headerState: vm$.state.loaded_content_selection,
-      allAriaLabel: "全选当前页内容",
-      itemAriaLabel: "选择内容",
-      size: 18,
-      itemState(content) {
-        return vm$.methods.contentSelectionState(content);
-      },
-      onSelectAll() {
-        vm$.methods.toggleLoadedContentsSelected();
-      },
-      onSelect(content) {
-        vm$.methods.toggleContentSelected(content);
-      },
-    },
     onRow(content) {
       const detail_href = vm$.methods.detailHref(content);
       return {

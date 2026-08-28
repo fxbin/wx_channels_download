@@ -25,19 +25,16 @@ func (c *APIClient) handle_content_list_with_type(ctx *gin.Context, force_conten
 		return
 	}
 	var body struct {
-		AccountId    *string `form:"account_id"`
-		ContentType  *string `form:"content_type"`
-		Scope        *string `form:"scope"`
-		Keyword      *string `form:"keyword"`
-		StartAt      *int64  `form:"start_at"`
-		EndAt        *int64  `form:"end_at"`
-		MinLikeCount *int64  `form:"min_like_count"`
-		SortBy       *string `form:"sort_by"`
-		SortOrder    *string `form:"sort_order"`
-		Page         *int    `form:"page"`
-		PageSize     *int    `form:"page_size"`
-		Limit        *int    `form:"limit"`
-		Offset       *int    `form:"offset"`
+		AccountId   *string `form:"account_id"`
+		ContentType *string `form:"content_type"`
+		Scope       *string `form:"scope"`
+		Keyword     *string `form:"keyword"`
+		StartAt     *int64  `form:"start_at"`
+		EndAt       *int64  `form:"end_at"`
+		Page        *int    `form:"page"`
+		PageSize    *int    `form:"page_size"`
+		Limit       *int    `form:"limit"`
+		Offset      *int    `form:"offset"`
 	}
 	if err := ctx.ShouldBindQuery(&body); err != nil {
 		result.Err(ctx, 400, err.Error())
@@ -53,10 +50,6 @@ func (c *APIClient) handle_content_list_with_type(ctx *gin.Context, force_conten
 	}
 	if body.StartAt != nil && body.EndAt != nil && *body.StartAt >= *body.EndAt {
 		result.Err(ctx, 400, "start_at must be less than end_at")
-		return
-	}
-	if body.MinLikeCount != nil && *body.MinLikeCount < 0 {
-		result.Err(ctx, 400, "min_like_count must be non-negative")
 		return
 	}
 	page := 1
@@ -79,7 +72,7 @@ func (c *APIClient) handle_content_list_with_type(ctx *gin.Context, force_conten
 	if content_type == "" && body.ContentType != nil {
 		content_type = strings.TrimSpace(*body.ContentType)
 	}
-	var account_id, scope, keyword, sort_by, sort_order string
+	var account_id, scope, keyword string
 	if body.AccountId != nil {
 		account_id = *body.AccountId
 	}
@@ -93,32 +86,17 @@ func (c *APIClient) handle_content_list_with_type(ctx *gin.Context, force_conten
 	if body.Keyword != nil {
 		keyword = *body.Keyword
 	}
-	if body.SortBy != nil {
-		sort_by = strings.TrimSpace(*body.SortBy)
-	}
-	if body.SortOrder != nil {
-		sort_order = strings.TrimSpace(*body.SortOrder)
-	}
-	if err := services.ValidateContentSort(sort_by, sort_order); err != nil {
-		result.Err(ctx, 400, err.Error())
-		return
-	}
 
-	page_result, err := c.content_service.ListContentsRanked(services.ContentRankedListOptions{
-		ContentListOptions: services.ContentListOptions{
-			AccountID: account_id,
-			Type:      content_type,
-			Scope:     scope,
-			Keyword:   keyword,
-			StartAt:   body.StartAt,
-			EndAt:     body.EndAt,
-			Page:      page,
-			PageSize:  size,
-			Offset:    &offset,
-		},
-		MinLikeCount: body.MinLikeCount,
-		SortBy:       sort_by,
-		SortOrder:    sort_order,
+	page_result, err := c.content_service.ListContents(services.ContentListOptions{
+		AccountID: account_id,
+		Type:      content_type,
+		Scope:     scope,
+		Keyword:   keyword,
+		StartAt:   body.StartAt,
+		EndAt:     body.EndAt,
+		Page:      page,
+		PageSize:  size,
+		Offset:    &offset,
 	})
 	if err != nil {
 		result.Err(ctx, 500, err.Error())
