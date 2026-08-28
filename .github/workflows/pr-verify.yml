@@ -40,3 +40,5 @@ jobs:
         run: npm ci
       - name: Lint frontend
         run: npm run lint
+      - name: Check profile selector syntax
+        run: node --check ../pkg/scraper/wxchannels/inject/channels.profile.js
