@@ -63,7 +63,11 @@ func (a *ChannelsAdapter) ToContent(data any) (*model.Content, error) {
 		return nil, err
 	}
 	content, _, err := ToContent(object)
-	return content, err
+	if err != nil {
+		return nil, err
+	}
+	apply_engagement_metrics(content, engagement_metrics_from_fetch(data))
+	return content, nil
 }
 
 func (a *ChannelsAdapter) ToAccount(data any) (*model.Account, error) {
@@ -83,6 +87,7 @@ func (a *ChannelsAdapter) ToContentDetails(data any) ([]adapter.ContentDetail, e
 	if err != nil {
 		return nil, err
 	}
+	apply_engagement_metrics(content, engagement_metrics_from_fetch(data))
 	if detail == nil {
 		return nil, nil
 	}
@@ -101,5 +106,16 @@ func (a *ChannelsAdapter) BuildDownloadTaskFromFetch(data any, config_json json.
 	if err != nil {
 		return nil, fmt.Errorf("encode wxchannels download task content: %w", err)
 	}
-	return a.BuildDownloadTask(content_json, config_json)
+	result, err := a.BuildDownloadTask(content_json, config_json)
+	if err != nil {
+		return nil, err
+	}
+	metrics := engagement_metrics_from_fetch(data)
+	if result != nil {
+		apply_engagement_metrics(result.Content, metrics)
+		for detail_index := range result.ContentDetails {
+			apply_engagement_metrics(result.ContentDetails[detail_index].Content, metrics)
+		}
+	}
+	return result, nil
 }
