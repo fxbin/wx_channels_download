@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"gorm.io/gorm"
+
 	"wx_channel/internal/database/model"
 )
 
@@ -122,7 +124,7 @@ func (s *ContentService) ListContentsRanked(options ContentRankedListOptions) (*
 		offset = *options.Offset
 	}
 
-	build_query := func() anyQuery {
+	build_query := func() *gorm.DB {
 		query := s.db.Model(&model.Content{})
 		if scope == ContentListScopeTask {
 			query = query.Where(`EXISTS (
@@ -154,16 +156,16 @@ func (s *ContentService) ListContentsRanked(options ContentRankedListOptions) (*
 		if options.MinLikeCount != nil {
 			query = query.Where("content.like_count >= ?", *options.MinLikeCount)
 		}
-		return anyQuery{DB: query}
+		return query
 	}
 
 	var total int64
-	if err := build_query().DB.Distinct("content.id").Count(&total).Error; err != nil {
+	if err := build_query().Distinct("content.id").Count(&total).Error; err != nil {
 		return nil, err
 	}
 
 	var contents []model.Content
-	if err := build_query().DB.
+	if err := build_query().
 		Distinct("content.*").
 		Order(content_order_clause(sort_by, sort_order)).
 		Limit(page_size).
@@ -192,35 +194,49 @@ func (s *ContentService) ListContentsRanked(options ContentRankedListOptions) (*
 			publish_time = *content.PublishTime
 		}
 		accounts := accounts_by_content_id[content.Id]
-		if accounts == nil { accounts = make([]ContentAccountRecord, 0) }
+		if accounts == nil {
+			accounts = make([]ContentAccountRecord, 0)
+		}
 		influencers := influencers_by_content_id[content.Id]
-		if influencers == nil { influencers = make([]ContentInfluencerRecord, 0) }
+		if influencers == nil {
+			influencers = make([]ContentInfluencerRecord, 0)
+		}
 		download_tasks := download_tasks_by_content_id[content.Id]
-		if download_tasks == nil { download_tasks = make([]ContentDownloadTaskRecord, 0) }
+		if download_tasks == nil {
+			download_tasks = make([]ContentDownloadTaskRecord, 0)
+		}
 
 		list = append(list, ContentRankedListItem{
 			ContentListItem: ContentListItem{
-				ID: content.Id, PlatformID: content.PlatformId, Type: content.Type, Subtype: content.Subtype,
-				ExternalID: content.ExternalId, ExternalID2: content.ExternalId2, ExternalID3: content.ExternalId3,
-				Title: content.Title, Description: content.Description, URL: content.URL, SourceURL: content.SourceURL,
-				CoverURL: content.CoverURL, CoverWidth: content.CoverWidth, CoverHeight: content.CoverHeight,
-				PublishTime: publish_time, Accounts: accounts, Influencers: influencers,
-				DownloadTasks: download_tasks, FileCount: file_counts_by_content_id[content.Id],
+				ID:            content.Id,
+				PlatformID:    content.PlatformId,
+				Type:          content.Type,
+				Subtype:       content.Subtype,
+				ExternalID:    content.ExternalId,
+				ExternalID2:   content.ExternalId2,
+				ExternalID3:   content.ExternalId3,
+				Title:         content.Title,
+				Description:   content.Description,
+				URL:           content.URL,
+				SourceURL:     content.SourceURL,
+				CoverURL:      content.CoverURL,
+				CoverWidth:    content.CoverWidth,
+				CoverHeight:   content.CoverHeight,
+				PublishTime:   publish_time,
+				Accounts:      accounts,
+				Influencers:   influencers,
+				DownloadTasks: download_tasks,
+				FileCount:     file_counts_by_content_id[content.Id],
 			},
-			ViewCount: content.ViewCount, LikeCount: content.LikeCount, CommentCount: content.CommentCount,
-			ShareCount: content.ShareCount, CollectCount: content.CollectCount,
+			ViewCount:    content.ViewCount,
+			LikeCount:    content.LikeCount,
+			CommentCount: content.CommentCount,
+			ShareCount:   content.ShareCount,
+			CollectCount: content.CollectCount,
 		})
 	}
 
 	return &ContentRankedListResult{List: list, Total: total, Page: page, PageSize: page_size}, nil
-}
-
-// anyQuery keeps the query builder closure strongly scoped without exposing a
-// new public GORM type in the list API.
-type anyQuery struct { DB interfaceDB }
-
-type interfaceDB interface {
-	Distinct(query interface{}, args ...interface{}) interfaceDB
 }
 
 func (s *ContentService) content_file_counts(content_ids []string) (map[string]int64, error) {
@@ -230,16 +246,19 @@ func (s *ContentService) content_file_counts(content_ids []string) (map[string]i
 	}
 	type count_row struct {
 		ContentID string `gorm:"column:content_id"`
-		Count int64 `gorm:"column:count"`
+		Count     int64  `gorm:"column:count"`
 	}
 	var rows []count_row
 	if err := s.db.Model(&model.DownloadResource{}).
 		Select("content_id, COUNT(*) AS count").
 		Where("content_id IN ? AND deleted_at IS NULL", content_ids).
-		Group("content_id").Scan(&rows).Error; err != nil {
+		Group("content_id").
+		Scan(&rows).Error; err != nil {
 		return nil, err
 	}
-	for _, row := range rows { counts[row.ContentID] = row.Count }
+	for _, row := range rows {
+		counts[row.ContentID] = row.Count
+	}
 
 	var embedded_rows []count_row
 	if err := s.db.Table("content_relation AS relation").
@@ -251,9 +270,12 @@ func (s *ContentService) content_file_counts(content_ids []string) (map[string]i
 			AND parent_content.type IN ? AND parent_content.deleted_at IS NULL
 			AND embedded_content.type IN ? AND embedded_content.deleted_at IS NULL`,
 			content_ids, model.ContentRelationContains, embedded_content_parent_types, embedded_content_media_types).
-		Group("relation.source_content_id").Scan(&embedded_rows).Error; err != nil {
+		Group("relation.source_content_id").
+		Scan(&embedded_rows).Error; err != nil {
 		return nil, err
 	}
-	for _, row := range embedded_rows { counts[row.ContentID] += row.Count }
+	for _, row := range embedded_rows {
+		counts[row.ContentID] += row.Count
+	}
 	return counts, nil
 }
