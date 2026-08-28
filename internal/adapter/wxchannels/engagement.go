@@ -177,10 +177,14 @@ func parse_engagement_count(value any) (int64, bool) {
 		}
 		return int64(math.Round(float64(typed))), true
 	case int:
-		if typed < 0 { return 0, false }
+		if typed < 0 {
+			return 0, false
+		}
 		return int64(typed), true
 	case int64:
-		if typed < 0 { return 0, false }
+		if typed < 0 {
+			return 0, false
+		}
 		return typed, true
 	case json.Number:
 		return parse_engagement_count_string(typed.String())
@@ -188,7 +192,9 @@ func parse_engagement_count(value any) (int64, bool) {
 		return parse_engagement_count_string(typed)
 	default:
 		raw, err := json.Marshal(typed)
-		if err != nil { return 0, false }
+		if err != nil {
+			return 0, false
+		}
 		var text string
 		if err := json.Unmarshal(raw, &text); err == nil {
 			return parse_engagement_count_string(text)
@@ -235,13 +241,58 @@ func parse_engagement_count_string(value string) (int64, bool) {
 	return int64(math.Round(number * multiplier)), true
 }
 
+func mark_engagement_observed(content *model.Content, metrics engagement_metrics) {
+	if content == nil {
+		return
+	}
+	observed := make([]string, 0, 5)
+	if metrics.View.Present {
+		observed = append(observed, "view")
+	}
+	if metrics.Like.Present {
+		observed = append(observed, "like")
+	}
+	if metrics.Comment.Present {
+		observed = append(observed, "comment")
+	}
+	if metrics.Share.Present {
+		observed = append(observed, "share")
+	}
+	if metrics.Collect.Present {
+		observed = append(observed, "collect")
+	}
+
+	metadata := make(map[string]any)
+	if raw := strings.TrimSpace(content.Metadata); raw != "" {
+		_ = json.Unmarshal([]byte(raw), &metadata)
+		if metadata == nil {
+			metadata = make(map[string]any)
+		}
+	}
+	metadata[model.ContentMetadataEngagementObservedKey] = observed
+	if raw, err := json.Marshal(metadata); err == nil {
+		content.Metadata = string(raw)
+	}
+}
+
 func apply_engagement_metrics(content *model.Content, metrics engagement_metrics) {
 	if content == nil {
 		return
 	}
-	if metrics.Like.Present { content.LikeCount = metrics.Like.Value }
-	if metrics.Comment.Present { content.CommentCount = metrics.Comment.Value }
-	if metrics.Share.Present { content.ShareCount = metrics.Share.Value }
-	if metrics.Collect.Present { content.CollectCount = metrics.Collect.Value }
-	if metrics.View.Present { content.ViewCount = metrics.View.Value }
+	mark_engagement_observed(content, metrics)
+	if metrics.Like.Present {
+		content.LikeCount = metrics.Like.Value
+	}
+	if metrics.Comment.Present {
+		content.CommentCount = metrics.Comment.Value
+	}
+	if metrics.Share.Present {
+		content.ShareCount = metrics.Share.Value
+	}
+	if metrics.Collect.Present {
+		content.CollectCount = metrics.Collect.Value
+	}
+	if metrics.View.Present {
+		content.ViewCount = metrics.View.Value
+	}
 }
