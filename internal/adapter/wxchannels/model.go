@@ -534,6 +534,7 @@ func (a *ChannelsAdapter) BuildDownloadTask(content_json json.RawMessage, config
 	if err != nil {
 		return nil, err
 	}
+	apply_engagement_metrics(content, engagement_metrics_from_fetch(content_json))
 	account, err := ToAccount(&obj)
 	if err != nil {
 		return nil, err
