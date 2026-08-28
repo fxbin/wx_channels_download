@@ -31,6 +31,15 @@ var engagement_metric_keys = map[string][]string{
 	"view":    {"viewcount", "playcount", "readcount"},
 }
 
+var engagement_metric_containers = []string{
+	"favinfo",
+	"feedinfo",
+	"objectextend",
+	"statistics",
+	"stats",
+	"countinfo",
+}
+
 func engagement_metrics_from_fetch(data any) engagement_metrics {
 	raw, ok := engagement_json_bytes(data)
 	if !ok || len(raw) == 0 {
@@ -41,10 +50,10 @@ func engagement_metrics_from_fetch(data any) engagement_metrics {
 		return engagement_metrics{}
 	}
 
-	// Prefer feedInfo / objectExtend payloads before falling back to a bounded
-	// recursive scan. This avoids accidentally picking counters from comments
-	// or other related objects when the response contains several entities.
-	candidates := make([]any, 0, 4)
+	// Search only the feed/object/data surfaces that represent the content
+	// itself. We intentionally do not recursively walk arbitrary arrays such as
+	// commentInfo because comment records can have their own likeCount fields.
+	candidates := make([]any, 0, 5)
 	if root, ok := value.(map[string]any); ok {
 		if data_value, ok := map_value_case_insensitive(root, "data"); ok {
 			if data_map, ok := data_value.(map[string]any); ok {
@@ -63,8 +72,8 @@ func engagement_metrics_from_fetch(data any) engagement_metrics {
 		if object_value, ok := map_value_case_insensitive(root, "object"); ok {
 			candidates = append(candidates, object_value)
 		}
+		candidates = append(candidates, root)
 	}
-	candidates = append(candidates, value)
 
 	return engagement_metrics{
 		Like:    find_engagement_metric(candidates, engagement_metric_keys["like"]),
@@ -104,36 +113,30 @@ func find_metric_in_value(value any, keys []string, depth int) (int64, bool) {
 	if depth > 6 || value == nil {
 		return 0, false
 	}
-	switch typed := value.(type) {
-	case map[string]any:
-		for _, expected := range keys {
-			for key, raw_value := range typed {
-				if normalize_metric_key(key) != expected {
-					continue
-				}
-				if count, ok := parse_engagement_count(raw_value); ok {
-					return count, true
-				}
+	typed, ok := value.(map[string]any)
+	if !ok {
+		return 0, false
+	}
+
+	for _, expected := range keys {
+		for key, raw_value := range typed {
+			if normalize_metric_key(key) != expected {
+				continue
 			}
-		}
-		// Favor likely metric containers before arbitrary nested payloads.
-		for _, container := range []string{"favinfo", "feedinfo", "objectextend", "statistics", "stats", "countinfo"} {
-			for key, nested := range typed {
-				if normalize_metric_key(key) != container {
-					continue
-				}
-				if count, ok := find_metric_in_value(nested, keys, depth+1); ok {
-					return count, true
-				}
-			}
-		}
-		for _, nested := range typed {
-			if count, ok := find_metric_in_value(nested, keys, depth+1); ok {
+			if count, ok := parse_engagement_count(raw_value); ok {
 				return count, true
 			}
 		}
-	case []any:
-		for _, nested := range typed {
+	}
+
+	// Recurse only through known content-level metric containers. Do not walk
+	// arbitrary maps/slices because related entities (especially comments) can
+	// expose counters with the same names.
+	for _, container := range engagement_metric_containers {
+		for key, nested := range typed {
+			if normalize_metric_key(key) != container {
+				continue
+			}
 			if count, ok := find_metric_in_value(nested, keys, depth+1); ok {
 				return count, true
 			}
