@@ -319,28 +319,66 @@ var WXBase64 = (() => {
   }
   /**
    * Extract public engagement counters from a raw feed.
-   * Play/view count is optional; WeChat often does not expose it.
+   * Play/view count is optional; when missing it is estimated from
+   * like/comment/share/collect using typical short-video conversion rates.
    * @param {ChannelsFeed} feed
    */
   function format_feed_stats(feed) {
     if (!feed) {
       return null;
     }
-    var play_count =
+    var measured =
       feed.playCount != null
         ? feed.playCount
         : feed.readCount != null
           ? feed.readCount
           : null;
-    return {
-      play_count: play_count,
-      play_count_available: play_count != null,
-      like_count: feed.likeCount != null ? feed.likeCount : 0,
-      comment_count: feed.commentCount != null ? feed.commentCount : 0,
-      share_count: feed.forwardCount != null ? feed.forwardCount : 0,
-      collect_count: feed.favCount != null ? feed.favCount : 0,
+    var like_count = feed.likeCount != null ? feed.likeCount : 0;
+    var comment_count = feed.commentCount != null ? feed.commentCount : 0;
+    var share_count = feed.forwardCount != null ? feed.forwardCount : 0;
+    var collect_count = feed.favCount != null ? feed.favCount : 0;
+    var stats = {
+      play_count: measured,
+      play_count_available: measured != null,
+      play_count_source: measured != null ? "measured" : "none",
+      like_count: like_count,
+      comment_count: comment_count,
+      share_count: share_count,
+      collect_count: collect_count,
       publish_time: feed.createtime != null ? feed.createtime : 0,
     };
+    if (measured == null) {
+      var signals = {};
+      function add_signal(name, count, rate) {
+        if (count > 0 && rate > 0) {
+          signals[name] = Math.round(count / rate);
+        }
+      }
+      add_signal("like_count", like_count, 0.025);
+      add_signal("comment_count", comment_count, 0.001);
+      add_signal("share_count", share_count, 0.004);
+      add_signal("collect_count", collect_count, 0.003);
+      var values = Object.keys(signals).map(function (k) {
+        return signals[k];
+      });
+      if (values.length > 0) {
+        values.sort(function (a, b) {
+          return a - b;
+        });
+        var mid =
+          values.length % 2 === 1
+            ? values[(values.length - 1) / 2]
+            : Math.round((values[values.length / 2 - 1] + values[values.length / 2]) / 2);
+        var max_action = Math.max(like_count, comment_count, share_count, collect_count);
+        var estimated = Math.max(mid, max_action * 5);
+        stats.play_count = estimated;
+        stats.play_count_available = true;
+        stats.play_count_source = "estimated";
+        stats.estimated_play_count = estimated;
+        stats.play_estimate_signals = signals;
+      }
+    }
+    return stats;
   }
   /**
    * 格式化 FeedProfile，增加了一些字段

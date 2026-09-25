@@ -273,6 +273,13 @@ type Engagement struct {
 	PublishTime  int64 `json:"publish_time"`
 	// PlayCountAvailable is false when the platform never returned a play/view count.
 	PlayCountAvailable bool `json:"play_count_available"`
+	// PlayCountSource is "measured" when the platform exposed a real play count,
+	// "estimated" when derived from engagement ratios, empty when no estimate was made.
+	PlayCountSource string `json:"play_count_source,omitempty"`
+	// EstimatedPlayCount is set only when PlayCountSource == "estimated".
+	EstimatedPlayCount int64 `json:"estimated_play_count,omitempty"`
+	// PlayEstimateSignals maps each engagement signal to its own play estimate.
+	PlayEstimateSignals map[string]int64 `json:"play_estimate_signals,omitempty"`
 }
 
 // ExtractEngagement merges counters from the object itself and objectExtend.monotonicData.countInfo.
@@ -290,9 +297,11 @@ func (o *ChannelsObject) ExtractEngagement() Engagement {
 	if o.PlayCount > 0 {
 		eng.PlayCount = o.PlayCount
 		eng.PlayCountAvailable = true
+		eng.PlayCountSource = "measured"
 	} else if o.ReadCount > 0 {
 		eng.PlayCount = o.ReadCount
 		eng.PlayCountAvailable = true
+		eng.PlayCountSource = "measured"
 	}
 	if o.ObjectExtend != nil && len(o.ObjectExtend.MonotonicData) > 0 {
 		var mono Monotonicdata

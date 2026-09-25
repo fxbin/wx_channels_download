@@ -264,7 +264,7 @@ func ToContent(obj *wxchannels.ChannelsObject) (*model.Content, any, error) {
 			UpdatedAt: now,
 		},
 	}
-	eng := obj.ExtractEngagement()
+	eng := WithPlayEstimate(obj.ExtractEngagement(), DefaultPlayEstimateRates)
 	c.LikeCount = eng.LikeCount
 	c.CommentCount = eng.CommentCount
 	c.ShareCount = eng.ShareCount

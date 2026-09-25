@@ -134,10 +134,13 @@ type FeedProfile = {
   cover_url: string;
   /** video publish time */
   createtime: number;
-  /** public engagement counters (play count may be absent) */
+  /** public engagement counters (play count may be estimated when absent) */
   stats?: {
     play_count: number | null;
     play_count_available: boolean;
+    play_count_source?: "measured" | "estimated" | "none";
+    estimated_play_count?: number;
+    play_estimate_signals?: Record<string, number>;
     like_count: number;
     comment_count: number;
     share_count: number;

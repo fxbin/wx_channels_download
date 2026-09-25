@@ -104,6 +104,79 @@ func TestApplySharedEngagement(t *testing.T) {
 	}
 }
 
+func TestEstimatePlayCountUsesEngagementRatios(t *testing.T) {
+	// Real sample from local download verification:
+	// likes 13202, comments 257, shares 4597, collects 5624.
+	eng := wxchannels.Engagement{
+		LikeCount:    13202,
+		CommentCount: 257,
+		ShareCount:   4597,
+		CollectCount: 5624,
+	}
+	est := EstimatePlayCount(eng, DefaultPlayEstimateRates)
+	if est.PlayCount <= 0 {
+		t.Fatalf("expected positive estimate, got %+v", est)
+	}
+	if est.Signals["like_count"] != 528080 {
+		t.Fatalf("like signal estimate=%d want 528080", est.Signals["like_count"])
+	}
+	if est.Signals["comment_count"] != 257000 {
+		t.Fatalf("comment signal estimate=%d want 257000", est.Signals["comment_count"])
+	}
+	if est.Signals["share_count"] != 1149250 {
+		t.Fatalf("share signal estimate=%d want 1149250", est.Signals["share_count"])
+	}
+	if est.Signals["collect_count"] != 1874667 {
+		t.Fatalf("collect signal estimate=%d want 1874667", est.Signals["collect_count"])
+	}
+	// median of (257000, 528080, 1149250, 1874667) = (528080+1149250)/2 = 838665
+	if est.PlayCount != 838665 {
+		t.Fatalf("combined estimate=%d want 838665", est.PlayCount)
+	}
+}
+
+func TestEstimatePlayCountFloorAndMeasured(t *testing.T) {
+	// One huge collect with tiny other signals should hit the floor (max_action*5).
+	eng := wxchannels.Engagement{LikeCount: 10, CollectCount: 10000}
+	est := EstimatePlayCount(eng, DefaultPlayEstimateRates)
+	if est.PlayCount < 50000 {
+		t.Fatalf("expected floor >= 50000, got %d", est.PlayCount)
+	}
+
+	measured := wxchannels.Engagement{
+		PlayCount:          12345,
+		PlayCountAvailable: true,
+		PlayCountSource:    "measured",
+		LikeCount:          10,
+	}
+	out := WithPlayEstimate(measured, DefaultPlayEstimateRates)
+	if out.PlayCount != 12345 || out.PlayCountSource != "measured" {
+		t.Fatalf("measured play should stay unchanged: %+v", out)
+	}
+}
+
+func TestWithPlayEstimateMarksSource(t *testing.T) {
+	eng := wxchannels.Engagement{LikeCount: 100, CommentCount: 5, ShareCount: 20, CollectCount: 30}
+	out := WithPlayEstimate(eng, DefaultPlayEstimateRates)
+	if out.PlayCountSource != "estimated" || !out.PlayCountAvailable {
+		t.Fatalf("expected estimated source: %+v", out)
+	}
+	if out.EstimatedPlayCount != out.PlayCount {
+		t.Fatalf("estimated_play_count mismatch: %+v", out)
+	}
+	if len(out.PlayEstimateSignals) == 0 {
+		t.Fatal("expected per-signal estimates")
+	}
+
+	meta := engagement_metadata(out, 1)
+	if meta["play_count_source"] != "estimated" {
+		t.Fatalf("metadata source=%v", meta["play_count_source"])
+	}
+	if _, ok := meta["play_estimate_signals"]; !ok {
+		t.Fatalf("metadata missing signal breakdown: %+v", meta)
+	}
+}
+
 func TestToContentMapsEngagement(t *testing.T) {
 	obj := &wxchannels.ChannelsObject{
 		ID:           "video-1",
@@ -149,8 +222,12 @@ func TestToContentMapsEngagement(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected ContentVideo detail, got %T", detail)
 	}
-	if video.PlayTimes != 0 {
-		t.Fatalf("play times should stay 0 when unavailable, got %d", video.PlayTimes)
+	// Play count is estimated from engagement when the platform omits it.
+	if video.PlayTimes <= 0 {
+		t.Fatalf("expected estimated play times > 0, got %d", video.PlayTimes)
+	}
+	if content.ViewCount != video.PlayTimes {
+		t.Fatalf("view_count=%d play_times=%d", content.ViewCount, video.PlayTimes)
 	}
 }
 
