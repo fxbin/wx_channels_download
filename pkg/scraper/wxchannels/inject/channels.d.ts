@@ -60,6 +60,9 @@ type ChannelsFeed = {
   /** comment count */
   commentCount: number;
   favCount: number;
+  /** optional play/view count; often not exposed by WeChat Channels */
+  playCount?: number;
+  readCount?: number;
   /** publisher */
   contact: {
     username: string;
@@ -131,6 +134,16 @@ type FeedProfile = {
   cover_url: string;
   /** video publish time */
   createtime: number;
+  /** public engagement counters (play count may be absent) */
+  stats?: {
+    play_count: number | null;
+    play_count_available: boolean;
+    like_count: number;
+    comment_count: number;
+    share_count: number;
+    collect_count: number;
+    publish_time: number;
+  };
   /** file size */
   size?: number;
   /** video duration */

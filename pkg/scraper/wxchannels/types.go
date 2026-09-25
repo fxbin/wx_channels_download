@@ -250,6 +250,71 @@ type ChannelsObject struct {
 	LiveInfo      *ChannelsLiveInfo   `json:"liveInfo,omitempty"`
 	Files         []ChannelsMediaItem `json:"files"`
 	AnchorContact *ChannelsContact    `json:"anchorContact,omitempty"`
+	// Engagement counters commonly present on page-hook feeds.
+	LikeCount    int64 `json:"likeCount,omitempty"`
+	CommentCount int64 `json:"commentCount,omitempty"`
+	ForwardCount int64 `json:"forwardCount,omitempty"`
+	FavCount     int64 `json:"favCount,omitempty"`
+	// ReadCount / PlayCount are not always exposed; keep optional for future payloads.
+	ReadCount int64 `json:"readCount,omitempty"`
+	PlayCount int64 `json:"playCount,omitempty"`
+	// ObjectExtend may carry monotonicData.countInfo with the same counters.
+	ObjectExtend *ObjectExtend `json:"objectExtend,omitempty"`
+}
+
+// Engagement holds public interaction counters for one feed.
+// Play/view count is left zero when the platform does not expose it.
+type Engagement struct {
+	PlayCount    int64 `json:"play_count"`
+	LikeCount    int64 `json:"like_count"`
+	CommentCount int64 `json:"comment_count"`
+	ShareCount   int64 `json:"share_count"`
+	CollectCount int64 `json:"collect_count"`
+	PublishTime  int64 `json:"publish_time"`
+	// PlayCountAvailable is false when the platform never returned a play/view count.
+	PlayCountAvailable bool `json:"play_count_available"`
+}
+
+// ExtractEngagement merges counters from the object itself and objectExtend.monotonicData.countInfo.
+func (o *ChannelsObject) ExtractEngagement() Engagement {
+	if o == nil {
+		return Engagement{}
+	}
+	eng := Engagement{
+		LikeCount:    o.LikeCount,
+		CommentCount: o.CommentCount,
+		ShareCount:   o.ForwardCount,
+		CollectCount: o.FavCount,
+		PublishTime:  int64(o.CreateTime),
+	}
+	if o.PlayCount > 0 {
+		eng.PlayCount = o.PlayCount
+		eng.PlayCountAvailable = true
+	} else if o.ReadCount > 0 {
+		eng.PlayCount = o.ReadCount
+		eng.PlayCountAvailable = true
+	}
+	if o.ObjectExtend != nil && len(o.ObjectExtend.MonotonicData) > 0 {
+		var mono Monotonicdata
+		if err := json.Unmarshal(o.ObjectExtend.MonotonicData, &mono); err == nil {
+			if eng.LikeCount == 0 {
+				eng.LikeCount = int64(mono.Countinfo.Likecount)
+			}
+			if eng.CommentCount == 0 {
+				eng.CommentCount = int64(mono.Countinfo.Commentcount)
+			}
+			if eng.ShareCount == 0 {
+				eng.ShareCount = int64(mono.Countinfo.Forwardcount)
+			}
+			if eng.CollectCount == 0 {
+				eng.CollectCount = int64(mono.Countinfo.Favcount)
+			}
+			if eng.CommentCount == 0 && mono.Commentcount.Commentcount > 0 {
+				eng.CommentCount = int64(mono.Commentcount.Commentcount)
+			}
+		}
+	}
+	return eng
 }
 
 func (o *ChannelsObject) UnmarshalJSON(data []byte) error {

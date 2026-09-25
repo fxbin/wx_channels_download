@@ -318,6 +318,31 @@ var WXBase64 = (() => {
     )}`;
   }
   /**
+   * Extract public engagement counters from a raw feed.
+   * Play/view count is optional; WeChat often does not expose it.
+   * @param {ChannelsFeed} feed
+   */
+  function format_feed_stats(feed) {
+    if (!feed) {
+      return null;
+    }
+    var play_count =
+      feed.playCount != null
+        ? feed.playCount
+        : feed.readCount != null
+          ? feed.readCount
+          : null;
+    return {
+      play_count: play_count,
+      play_count_available: play_count != null,
+      like_count: feed.likeCount != null ? feed.likeCount : 0,
+      comment_count: feed.commentCount != null ? feed.commentCount : 0,
+      share_count: feed.forwardCount != null ? feed.forwardCount : 0,
+      collect_count: feed.favCount != null ? feed.favCount : 0,
+      publish_time: feed.createtime != null ? feed.createtime : 0,
+    };
+  }
+  /**
    * 格式化 FeedProfile，增加了一些字段
    * @param {ChannelsFeed} feed
    * @returns {FeedProfile | null}
@@ -329,6 +354,7 @@ var WXBase64 = (() => {
         type: "live",
         // id: feed.id,
         title: feed.description || "直播",
+        stats: format_feed_stats(feed),
         url: feed.liveInfo.streamUrl,
         cover_url: (() => {
           if (feed.anchorContact) {
@@ -378,6 +404,7 @@ var WXBase64 = (() => {
         nonce_id: feed.objectNonceId,
         cover_url: get_picture_cover_url(media),
         title: get_feed_title(feed),
+        stats: format_feed_stats(feed),
         files: mediaList,
         bgm: format_bgm(feed),
         url: "",
@@ -397,6 +424,7 @@ var WXBase64 = (() => {
         id: feed.id,
         nonce_id: feed.objectNonceId,
         title: get_feed_title(feed),
+        stats: format_feed_stats(feed),
         url: get_media_url(media),
         key: media.decodeKey,
         cover_url: media.coverUrl,

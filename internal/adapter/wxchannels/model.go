@@ -264,6 +264,14 @@ func ToContent(obj *wxchannels.ChannelsObject) (*model.Content, any, error) {
 			UpdatedAt: now,
 		},
 	}
+	eng := obj.ExtractEngagement()
+	c.LikeCount = eng.LikeCount
+	c.CommentCount = eng.CommentCount
+	c.ShareCount = eng.ShareCount
+	c.CollectCount = eng.CollectCount
+	if eng.PlayCountAvailable {
+		c.ViewCount = eng.PlayCount
+	}
 
 	// Live
 	if obj.LiveInfo != nil {
@@ -367,6 +375,9 @@ func ToContent(obj *wxchannels.ChannelsObject) (*model.Content, any, error) {
 		Size:     int64(media.FileSize),
 		URL:      c.URL,
 		Variants: to_content_video_variants(obj, c.Id),
+	}
+	if eng.PlayCountAvailable {
+		ext.PlayTimes = eng.PlayCount
 	}
 
 	return c, ext, nil
@@ -797,14 +808,15 @@ func (a *ChannelsAdapter) BuildDownloadTask(content_json json.RawMessage, config
 		config_json, _ := json.Marshal(cover_config)
 		info := &adapter.DownloadTaskResult{
 			Task: &model.DownloadTask{
-				ContentId:  &content_id,
-				Name:       title,
-				UniqueID:   task_unique_id,
-				PlatformId: PlatformID,
-				Status:     model.TaskStatusWaiting,
-				SourceURL:  content.SourceURL,
-				CoverURL:   content.CoverURL,
-				ConfigJSON: string(config_json),
+				ContentId:    &content_id,
+				Name:         title,
+				UniqueID:     task_unique_id,
+				PlatformId:   PlatformID,
+				Status:       model.TaskStatusWaiting,
+				SourceURL:    content.SourceURL,
+				CoverURL:     content.CoverURL,
+				ConfigJSON:   string(config_json),
+				MetadataJSON: build_task_metadata_json(&obj, "cover", contact.Nickname),
 			},
 			Resources:      []*adapter.ResourceInfo{build_cover_resource_info(content_id, task_unique_id, title, cover_url, base_extra_json)},
 			Account:        account,
@@ -892,14 +904,15 @@ func (a *ChannelsAdapter) BuildDownloadTask(content_json json.RawMessage, config
 
 		info := &adapter.DownloadTaskResult{
 			Task: &model.DownloadTask{
-				ContentId:  &content_id,
-				Name:       title,
-				UniqueID:   task_unique_id,
-				PlatformId: PlatformID,
-				Status:     model.TaskStatusWaiting,
-				SourceURL:  content.SourceURL,
-				CoverURL:   content.CoverURL,
-				ConfigJSON: string(config_json),
+				ContentId:    &content_id,
+				Name:         title,
+				UniqueID:     task_unique_id,
+				PlatformId:   PlatformID,
+				Status:       model.TaskStatusWaiting,
+				SourceURL:    content.SourceURL,
+				CoverURL:     content.CoverURL,
+				ConfigJSON:   string(config_json),
+				MetadataJSON: build_task_metadata_json(&obj, "picture", contact.Nickname),
 			},
 			Resources:      resources,
 			ContentDetail:  ext,
@@ -968,14 +981,15 @@ func (a *ChannelsAdapter) BuildDownloadTask(content_json json.RawMessage, config
 
 	info := &adapter.DownloadTaskResult{
 		Task: &model.DownloadTask{
-			ContentId:  &content_id,
-			Name:       title,
-			UniqueID:   task_unique_id,
-			PlatformId: PlatformID,
-			Status:     model.TaskStatusWaiting,
-			SourceURL:  content.SourceURL,
-			CoverURL:   content.CoverURL,
-			ConfigJSON: string(config_json),
+			ContentId:    &content_id,
+			Name:         title,
+			UniqueID:     task_unique_id,
+			PlatformId:   PlatformID,
+			Status:       model.TaskStatusWaiting,
+			SourceURL:    content.SourceURL,
+			CoverURL:     content.CoverURL,
+			ConfigJSON:   string(config_json),
+			MetadataJSON: build_task_metadata_json(&obj, "video", contact.Nickname),
 		},
 		Resources:      resources,
 		ContentDetail:  ext,
@@ -1178,7 +1192,9 @@ func parse_channels_object_for_download(content_json json.RawMessage) (wxchannel
 			return obj, fmt.Errorf("fetch channels feed profile: %s", profile_resp.ErrMsg)
 		}
 		if channels_object_has_download_shape(&profile_resp.Data.Object) {
-			return profile_resp.Data.Object, nil
+			profile_obj := profile_resp.Data.Object
+			apply_profile_comment_count(&profile_obj, profile_resp.Data.CommentCount)
+			return profile_obj, nil
 		}
 	}
 	shared_obj, ok, err := shared_feed_profile_to_channels_object(content_json)
@@ -1260,6 +1276,7 @@ func shared_video_profile_to_channels_object(resp wxchannels.ChannelsSharedFeedP
 			},
 		},
 	}
+	apply_shared_engagement(obj, feed_info)
 	return obj, true, nil
 }
 
@@ -1316,6 +1333,7 @@ func shared_picture_profile_to_channels_object(resp wxchannels.ChannelsSharedFee
 		},
 		Files: media,
 	}
+	apply_shared_engagement(obj, feed_info)
 	return obj, true, nil
 }
 
