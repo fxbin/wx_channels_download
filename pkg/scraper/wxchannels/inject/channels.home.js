@@ -120,18 +120,39 @@ WXU.onDOMContentLoaded(function () {
       alert: 0,
       source: "channels.home.js:114",
     });
+    WXU.log
+      .Warn()
+      .Str("file", "channels.home.js")
+      .Str("href", location.href)
+      .Bool("home_page_mounted", home_page_mounted)
+      .Bool("has_feed", !!(__wx_channels_store__ && __wx_channels_store__.feed))
+      .Msg("timeout: no feed profile within 5s");
   }, 5000);
   function clear_tip_timer() {
     clearTimeout(error_tip_timer);
     error_tip_timer = null;
   }
   var home_page_mounted = false;
-  WXU.onFetchFeedProfile((feed) => {
+  function log_feed_event(source, feed) {
     WXU.log
       .Info()
       .Str("file", "channels.home.js")
+      .Str("event", source)
+      .Str("href", location.href)
       .Bool("mounted", home_page_mounted)
-      .Msg("onFetchFeedProfile callback");
+      .Bool("has_feed", !!feed)
+      .Str("feed_id", feed && feed.id != null ? String(feed.id) : "")
+      .Msg("feed event received");
+    if (!feed) {
+      WXU.log
+        .Warn()
+        .Str("file", "channels.home.js")
+        .Str("event", source)
+        .Msg("feed event payload is empty");
+    }
+  }
+  WXU.onFetchFeedProfile((feed) => {
+    log_feed_event("onFetchFeedProfile", feed);
     if (home_page_mounted) {
       return;
     }
@@ -142,64 +163,41 @@ WXU.onDOMContentLoaded(function () {
     clear_tip_timer();
   });
   WXU.on("channels:PreloadFeeds", (feeds) => {
-    WXU.log
-      .Info()
-      .Str("file", "channels.home.js:147")
-      .JSON("feeds", feeds)
-      .Msg("PreloadFeeds callback");
+    log_feed_event("PreloadFeeds", feeds && feeds[0]);
     if (home_page_mounted) {
       return;
     }
     home_page_mounted = true;
     WXU.set_cur_video();
-    WXU.set_feed(feeds[0]);
-    WXU.emit(WXE.Events.Feed, feeds[0]);
+    WXU.set_feed(feeds && feeds[0]);
+    WXU.emit(WXE.Events.Feed, feeds && feeds[0]);
     clear_tip_timer();
   });
   WXU.onPCFlowLoaded((feeds) => {
-    WXU.log
-      .Info()
-      .Str("file", "channels.home.js:157")
-      .Str("feed", feeds[0])
-      .Str("title", feeds[0] ? feeds[0].objectDesc.description : null)
-      .Str("nickname", feeds[0] ? feeds[0].nickname : null)
-      .Bool("mounted", home_page_mounted)
-      .Msg("onPCFlowLoaded callback");
+    log_feed_event("onPCFlowLoaded", feeds && feeds[0]);
     if (home_page_mounted) {
       return;
     }
     home_page_mounted = true;
     WXU.set_cur_video();
-    WXU.set_feed(feeds[0]);
-    WXU.emit(WXE.Events.Feed, feeds[0]);
+    WXU.set_feed(feeds && feeds[0]);
+    WXU.emit(WXE.Events.Feed, feeds && feeds[0]);
     clear_tip_timer();
   });
   WXU.onGotoNextFeed((feed) => {
-    WXU.log
-      .Info()
-      .Str("file", "channels.home.js")
-      .JSON("feed", feed)
-      .Msg("onGotoNextFeed callback");
+    log_feed_event("onGotoNextFeed", feed);
     WXU.set_cur_video();
     WXU.set_feed(feed);
     WXU.emit(WXE.Events.Feed, feed);
   });
   WXU.onGotoPrevFeed((feed) => {
-    WXU.log
-      .Info()
-      .Str("file", "channels.home.js")
-      .JSON("feed", feed)
-      .Msg("onGotoPrevFeed callback");
+    log_feed_event("onGotoPrevFeed", feed);
     WXU.set_cur_video();
     WXU.set_feed(feed);
     WXU.emit(WXE.Events.Feed, feed);
   });
   WXU.onHomeFeedChanged((feed) => {
-    WXU.log
-      .Info()
-      .Str("file", "channels.home.js")
-      .JSON("feed", feed)
-      .Msg("onHomeFeedChanged callback");
+    log_feed_event("onHomeFeedChanged", feed);
     WXU.set_cur_video();
     WXU.set_feed(feed);
     WXU.emit(WXE.Events.Feed, feed);

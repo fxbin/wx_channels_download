@@ -449,13 +449,34 @@ var WXBase64 = (() => {
   function __wx_check_feed_existing(opt = {}) {
     var feed = __wx_channels_store__.feed;
     if (!feed) {
+      WXU.log
+        .Error()
+        .Str("file", "/channels.utils.js")
+        .Str("href", location.href)
+        .Str("pathname", location.pathname)
+        .Str("caller", opt.caller || "check_feed_existing")
+        .Bool("silence", !!opt.silence)
+        .Int("buffers", (__wx_channels_store__.buffers || []).length)
+        .Msg("检测不到视频: store.feed is empty");
       WXU.error({
-        source: "channels.utils.js:452",
+        source: "channels.utils.js:check_feed_existing",
         alert: Number(!opt.silence),
         msg: "检测不到视频，请提交 issue 反馈",
       });
       return [true, null];
     }
+    WXU.log
+      .Info()
+      .Str("file", "/channels.utils.js")
+      .Str("caller", opt.caller || "check_feed_existing")
+      .Str("feed_id", feed && feed.id != null ? String(feed.id) : "")
+      .Str(
+        "media_type",
+        feed && feed.objectDesc && feed.objectDesc.mediaType != null
+          ? String(feed.objectDesc.mediaType)
+          : "",
+      )
+      .Msg("check_feed_existing: feed present");
     return [false, feed];
   }
 
@@ -632,6 +653,7 @@ var WXBase64 = (() => {
   function __wx_download_menu_click_payload(trigger) {
     const [err, profile] = WXU.check_feed_existing({
       silence: true,
+      caller: "download_menu_click_payload",
     });
     return {
       profile: err ? null : profile,
@@ -715,6 +737,7 @@ var WXBase64 = (() => {
                 onClick() {
                   const [err, profile] = WXU.check_feed_existing({
                     silence: true,
+                    caller: "download_mp3_menu",
                   });
                   if (err) return;
                   __wx_channels_handle_click_download__({ suffix: ".mp3" });
@@ -762,6 +785,7 @@ var WXBase64 = (() => {
         ...(() => {
           const [err, feed] = WXU.check_feed_existing({
             silence: true,
+            caller: "download_spec_menu",
           });
           if (err) {
             return [];
@@ -971,11 +995,31 @@ var WXBase64 = (() => {
      * @param {ChannelsFeed} feed
      */
     set_feed(feed) {
+      if (!feed) {
+        WXU.log
+          .Warn()
+          .Str("file", "/channels.utils.js")
+          .Str("href", location.href)
+          .Bool("had_previous_feed", !!__wx_channels_store__.feed)
+          .Msg("set_feed skipped: empty feed payload");
+        return;
+      }
       __wx_channels_store__.feed = feed;
       WXU.log
         .Info()
         .Str("file", "/channels.utils.js")
-        .JSON("feed", feed)
+        .Str("href", location.href)
+        .Str("feed_id", feed && feed.id != null ? String(feed.id) : "")
+        .Str(
+          "nonce_id",
+          feed && feed.objectNonceId != null ? String(feed.objectNonceId) : "",
+        )
+        .Str(
+          "media_type",
+          feed && feed.objectDesc && feed.objectDesc.mediaType != null
+            ? String(feed.objectDesc.mediaType)
+            : "",
+        )
         .Msg("set_feed");
       WXU.downloader.browse([feed], { platform: "wxchannels" });
     },
@@ -984,6 +1028,14 @@ var WXBase64 = (() => {
      * @param {ChannelsFeed} feed
      */
     set_live_feed(feed) {
+      if (!feed) {
+        WXU.log
+          .Warn()
+          .Str("file", "/channels.utils.js")
+          .Str("href", location.href)
+          .Msg("set_live_feed skipped: empty feed payload");
+        return;
+      }
       __wx_channels_live_store__.feed = feed;
       WXU.log
         .Info()
@@ -1192,7 +1244,14 @@ var WXBase64 = (() => {
    * @param {string} [suffix] 后缀
    */
   async function __wx_channels_handle_click_download__({ spec, suffix }) {
-    const [err, feed] = WXU.check_feed_existing();
+    WXU.log
+      .Info()
+      .Str("file", "/channels.utils.js")
+      .Str("href", location.href)
+      .Str("spec", spec || "")
+      .Str("suffix", suffix || "")
+      .Msg("click_download: requested");
+    const [err, feed] = WXU.check_feed_existing({ caller: "handle_click_download" });
     if (err) return;
     const payload = { ...feed };
     payload.source_url = location.href;
@@ -1206,7 +1265,7 @@ ${payload.key || ""}`,
   }
   /** 下载视频封面 */
   async function __wx_channels_handle_download_cover() {
-    var [err, feed] = WXU.check_feed_existing();
+    var [err, feed] = WXU.check_feed_existing({ caller: "download_cover" });
     if (err) return;
     if (!WXU.config.downloadInFrontend) {
       var [err, data] = await WXU.downloader.create([feed], {
@@ -1250,7 +1309,14 @@ ${payload.key || ""}`,
 
   /** 下载图标 按钮，点击时的处理函数 */
   function __wx_download_btn_handler() {
-    const [err, feed] = WXU.check_feed_existing();
+    WXU.log
+      .Info()
+      .Str("file", "/channels.utils.js")
+      .Str("href", location.href)
+      .Str("pathname", location.pathname)
+      .Bool("has_feed", !!__wx_channels_store__.feed)
+      .Msg("download_btn clicked");
+    const [err, feed] = WXU.check_feed_existing({ caller: "download_btn_handler" });
     if (err) return;
     __wx_channels_handle_click_download__({
       spec: (() => {

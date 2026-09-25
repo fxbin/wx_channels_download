@@ -68,6 +68,46 @@ var (
 	js_load_local_playlist_reg                = regexp.MustCompile(`loadLocalPlaylist:([a-zA-Z]{1,})`)
 )
 
+// hook_hit records whether a critical JS-rewrite regex matched, so intermittent
+// "检测不到视频" failures can be diagnosed from app.log without guessing.
+type hook_hit struct {
+	name    string
+	matched bool
+}
+
+func apply_hook(src string, re *regexp.Regexp, repl string, name string, hits *[]hook_hit) string {
+	matched := re.MatchString(src)
+	if hits != nil {
+		*hits = append(*hits, hook_hit{name: name, matched: matched})
+	}
+	return re.ReplaceAllString(src, repl)
+}
+
+func log_hook_hits(logger *zerolog.Logger, pathname string, hits []hook_hit) {
+	if logger == nil || len(hits) == 0 {
+		return
+	}
+	matched_names := make([]string, 0, len(hits))
+	missed_names := make([]string, 0, len(hits))
+	for _, h := range hits {
+		if h.matched {
+			matched_names = append(matched_names, h.name)
+		} else {
+			missed_names = append(missed_names, h.name)
+		}
+	}
+	event := logger.Info().
+		Str("file", "pkg/scraper/wxchannels/interceptor.go").
+		Str("pathname", pathname).
+		Strs("hooks_matched", matched_names).
+		Strs("hooks_missed", missed_names)
+	if len(matched_names) == 0 {
+		event.Msg("wxchannels interceptor: no critical hooks matched (feed events will not fire)")
+		return
+	}
+	event.Msg("wxchannels interceptor: critical hook rewrite summary")
+}
+
 // NewInterceptorPlugins builds the Echo interception and rewrite rules owned by
 // the wxchannels scraper.
 func NewInterceptorPlugins(cfg InterceptorConfig, logger *zerolog.Logger) []*echo.Plugin {
@@ -294,11 +334,17 @@ func NewInterceptorPlugins(cfg InterceptorConfig, logger *zerolog.Logger) []*ech
 				js_script = js_import_reg.ReplaceAllString(js_script, `import"$1.js`+v+`"`)
 
 				if strings.Contains(pathname, "virtual_svg-icons-register.publish") {
-					js_script = js_preload_feed_reg.ReplaceAllString(js_script, ` (async()=>{const _r = await $1; typeof WXU !== "undefined" && WXU.emit("channels:PreloadFeeds", _r.data.object); return _r;})();(`)
+					var hits []hook_hit
+					js_script = apply_hook(js_script, js_preload_feed_reg, ` (async()=>{const _r = await $1; typeof WXU !== "undefined" && WXU.emit("channels:PreloadFeeds", _r.data.object); return _r;})();(`, "preload_feed", &hits)
 					flow_list_variable_name := "yt"
 					if m := js_flow_tab_reg.FindStringSubmatch(js_script); len(m) >= 2 {
 						flow_list_variable_name = m[1]
 					}
+					logger.Debug().
+						Str("file", "pkg/scraper/wxchannels/interceptor.go").
+						Str("pathname", pathname).
+						Str("flow_list_variable_name", flow_list_variable_name).
+						Msg("wxchannels interceptor: resolved flowTab variable")
 					{
 						js_go_next_feed := fmt.Sprintf(`goToNextFlowFeed:async function(v){
 						await $1(v);
@@ -310,7 +356,7 @@ func NewInterceptorPlugins(cfg InterceptorConfig, logger *zerolog.Logger) []*ech
 						// console.log("before GotoNextFeed", %[1]s, feed);
 						typeof WXU !== "undefined" && WXU.emit("channels:GotoNextFeed", feed);
 					}`, flow_list_variable_name)
-						js_script = js_go_to_next_flow_reg.ReplaceAllString(js_script, js_go_next_feed)
+						js_script = apply_hook(js_script, js_go_to_next_flow_reg, js_go_next_feed, "goToNextFlowFeed", &hits)
 					}
 					{
 						js_go_prev_feed := fmt.Sprintf(`goToPrevFlowFeed:async function(v){
@@ -323,7 +369,7 @@ func NewInterceptorPlugins(cfg InterceptorConfig, logger *zerolog.Logger) []*ech
 						// console.log("before GotoPrevFeed", %[1]s, feed);
 						typeof WXU !== "undefined" && WXU.emit("channels:GotoPrevFeed", feed);
 					}`, flow_list_variable_name)
-						js_script = js_go_to_prev_flow_reg.ReplaceAllString(js_script, js_go_prev_feed)
+						js_script = apply_hook(js_script, js_go_to_prev_flow_reg, js_go_prev_feed, "goToPrevFlowFeed", &hits)
 					}
 					{
 						js_init := `async finderInit() {
@@ -335,7 +381,7 @@ func NewInterceptorPlugins(cfg InterceptorConfig, logger *zerolog.Logger) []*ech
 					typeof WXU !== "undefined" && WXU.emit("channels:Init", data);
 					return result;
 				}async`
-						js_script = js_init_reg.ReplaceAllString(js_script, js_init)
+						js_script = apply_hook(js_script, js_init_reg, js_init, "finderInit", &hits)
 					}
 					{
 						js_pc_flow := `async finderPcFlow($1) {
@@ -347,7 +393,7 @@ func NewInterceptorPlugins(cfg InterceptorConfig, logger *zerolog.Logger) []*ech
 					typeof WXU !== "undefined" && WXU.emit("channels:PCFlowLoaded", feeds);
 					return result;
 				}async`
-						js_script = js_pc_flow_reg.ReplaceAllString(js_script, js_pc_flow)
+						js_script = apply_hook(js_script, js_pc_flow_reg, js_pc_flow, "finderPcFlow", &hits)
 					}
 					{
 						js_get_recommend_tabs_from_service := `async getRecommendTabsFromService() {
@@ -383,7 +429,7 @@ func NewInterceptorPlugins(cfg InterceptorConfig, logger *zerolog.Logger) []*ech
 					typeof WXU !== "undefined" && WXU.emit("channels:OnFeedProfileLoaded", feed);
 					return result;
 				}async`
-						js_script = js_feed_profile_reg.ReplaceAllString(js_script, js_feed_profile)
+						js_script = apply_hook(js_script, js_feed_profile_reg, js_feed_profile, "finderGetCommentDetail", &hits)
 					}
 					{
 						js_comment_list := `async finderGetCommentList($1) {
@@ -538,10 +584,12 @@ func NewInterceptorPlugins(cfg InterceptorConfig, logger *zerolog.Logger) []*ech
 						js_wxapi := `;typeof WXU !== "undefined" && WXU.emit("channels:APILoaded",` + api_methods_escaped + `);export{`
 						js_script = js_export_reg.ReplaceAllString(js_script, js_wxapi)
 					}
+					log_hook_hits(logger, pathname, hits)
 					ctx.SetResponseBody(js_script)
 					return
 				}
 				if strings.Contains(pathname, "connect.publish") || strings.Contains(pathname, "applyMic.publish") {
+					var hits []hook_hit
 					flow_list_variable_name := "yt"
 					if m := js_flow_tab_reg.FindStringSubmatch(js_script); len(m) >= 2 {
 						flow_list_variable_name = m[1]
@@ -558,7 +606,7 @@ func NewInterceptorPlugins(cfg InterceptorConfig, logger *zerolog.Logger) []*ech
 						// console.log("before GotoNextFeed", %[1]s, feed);
 						typeof WXU !== "undefined" && WXU.emit("channels:GotoNextFeed", feed);
 					}`, flow_list_variable_name)
-						js_script = js_go_to_next_flow_reg.ReplaceAllString(js_script, js_go_next_feed)
+						js_script = apply_hook(js_script, js_go_to_next_flow_reg, js_go_next_feed, "goToNextFlowFeed", &hits)
 					}
 					{
 						js_go_prev_feed := fmt.Sprintf(`goToPrevFlowFeed:async function(v){
@@ -571,7 +619,7 @@ func NewInterceptorPlugins(cfg InterceptorConfig, logger *zerolog.Logger) []*ech
 						// console.log("before GotoPrevFeed", %[1]s, feed);
 						typeof WXU !== "undefined" && WXU.emit("channels:GotoPrevFeed", feed);
 					}`, flow_list_variable_name)
-						js_script = js_go_to_prev_flow_reg.ReplaceAllString(js_script, js_go_prev_feed)
+						js_script = apply_hook(js_script, js_go_to_prev_flow_reg, js_go_prev_feed, "goToPrevFlowFeed", &hits)
 					}
 					{
 						js_wxutil := `;typeof WXU !== "undefined" && WXU.emit("channels:UtilsLoaded",{decodeBase64ToUint64String:decodeBase64ToUint64String,createAdapterFromGlobalMapper:createAdapterFromGlobalMapper,finderJoinLiveMapper:finderJoinLiveMapper});export{`
@@ -591,8 +639,9 @@ func NewInterceptorPlugins(cfg InterceptorConfig, logger *zerolog.Logger) []*ech
 						var feed = %[1]s.value.feeds[%[1]s.value.currentFeedIndex];
 						typeof WXU !== "undefined" && WXU.emit("channels:HomeFeedChanged", feed);
 					}`, local_feed_list_variable_name)
-						js_script = js_load_local_playlist_reg.ReplaceAllString(js_script, js_load_local)
+						js_script = apply_hook(js_script, js_load_local_playlist_reg, js_load_local, "loadLocalPlaylist", &hits)
 					}
+					log_hook_hits(logger, pathname, hits)
 					ctx.SetResponseBody(js_script)
 					return
 				}
