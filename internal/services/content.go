@@ -280,6 +280,11 @@ type ContentListItem struct {
 	CoverHeight   string                      `json:"cover_height"`
 	PublishTime   int64                       `json:"publish_time"`
 	CreatedAt     int64                       `json:"created_at"`
+	ViewCount     int64                       `json:"view_count"`
+	LikeCount     int64                       `json:"like_count"`
+	CommentCount  int64                       `json:"comment_count"`
+	ShareCount    int64                       `json:"share_count"`
+	CollectCount  int64                       `json:"collect_count"`
 	Accounts      []ContentAccountRecord      `json:"accounts"`
 	Influencers   []ContentInfluencerRecord   `json:"influencers"`
 	DownloadTasks []ContentDownloadTaskRecord `json:"download_tasks"`
@@ -1410,6 +1415,11 @@ func (s *ContentService) GetContentDetail(content_id string) (*ContentDetailItem
 			CoverHeight:   content.CoverHeight,
 			PublishTime:   publish_time,
 			CreatedAt:     content.CreatedAt,
+			ViewCount:     content.ViewCount,
+			LikeCount:     content.LikeCount,
+			CommentCount:  content.CommentCount,
+			ShareCount:    content.ShareCount,
+			CollectCount:  content.CollectCount,
 			Accounts:      accounts,
 			Influencers:   influencers,
 			DownloadTasks: download_tasks,
@@ -1503,7 +1513,9 @@ func (s *ContentService) ListContents(options ContentListOptions) (*ContentListR
 			content.external_id, content.external_id2, content.external_id3,
 			content.title, content.description, content.url, content.source_url,
 			content.cover_url, content.cover_width, content.cover_height,
-			content.publish_time, content.created_at`).
+			content.publish_time, content.created_at,
+			content.view_count, content.like_count, content.comment_count,
+			content.share_count, content.collect_count`).
 		Order("content.created_at DESC, content.id DESC").
 		Limit(page_size).
 		Offset(offset).
@@ -1601,6 +1613,11 @@ func (s *ContentService) ListContents(options ContentListOptions) (*ContentListR
 			CoverHeight:   content.CoverHeight,
 			PublishTime:   publish_time,
 			CreatedAt:     content.CreatedAt,
+			ViewCount:     content.ViewCount,
+			LikeCount:     content.LikeCount,
+			CommentCount:  content.CommentCount,
+			ShareCount:    content.ShareCount,
+			CollectCount:  content.CollectCount,
 			Accounts:      accounts,
 			Influencers:   influencers,
 			DownloadTasks: download_tasks,

@@ -160,6 +160,46 @@ function normalize_content_detail(raw) {
       first_non_empty(source.publish_time, source.PublishTime),
       0,
     ),
+    view_count: number_or_default(
+      first_non_empty(
+        source.view_count,
+        source.ViewCount,
+        source.content && source.content.view_count,
+      ),
+      0,
+    ),
+    like_count: number_or_default(
+      first_non_empty(
+        source.like_count,
+        source.LikeCount,
+        source.content && source.content.like_count,
+      ),
+      0,
+    ),
+    comment_count: number_or_default(
+      first_non_empty(
+        source.comment_count,
+        source.CommentCount,
+        source.content && source.content.comment_count,
+      ),
+      0,
+    ),
+    share_count: number_or_default(
+      first_non_empty(
+        source.share_count,
+        source.ShareCount,
+        source.content && source.content.share_count,
+      ),
+      0,
+    ),
+    collect_count: number_or_default(
+      first_non_empty(
+        source.collect_count,
+        source.CollectCount,
+        source.content && source.content.collect_count,
+      ),
+      0,
+    ),
     detail_type: first_non_empty(source.detail_type, source.DetailType),
     detail: first_non_empty(source.detail, source.Detail) || null,
     accounts: accounts_source.map(normalize_content_account).filter(Boolean),

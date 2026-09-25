@@ -259,30 +259,65 @@ function ContentRowAccounts(props) {
   ];
 }
 
+function format_engagement_count(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return "0";
+  if (n >= 100000000) return `${(n / 100000000).toFixed(1).replace(/\.0$/, "")}亿`;
+  if (n >= 10000) return `${(n / 10000).toFixed(1).replace(/\.0$/, "")}万`;
+  return String(n);
+}
+
 function ContentRowStatistics(props) {
   const statistics = props.statistics;
+  const engagement = statistics.engagement || {};
+  const engagement_items = [
+    { key: "play", label: "播放", value: engagement.play },
+    { key: "like", label: "赞", value: engagement.like },
+    { key: "comment", label: "评", value: engagement.comment },
+    { key: "share", label: "转", value: engagement.share },
+    { key: "collect", label: "藏", value: engagement.collect },
+  ].filter((item) => Number(item.value) > 0);
   const items = [
     ...statistics.task_statuses,
     { key: "files", label: "文件", value: statistics.files },
   ].filter((item) => item.value > 0);
   return [
-    For({
-      each: items,
-      render(item) {
-        return Tag(
-          {
-            name: "content-row-stat",
-            class: `content-row-stat content-row-stat-${item.key}`,
-            attributes: { title: `${item.label}：${item.value}` },
-          },
-          [
-            View({ class: "content-row-stat-value" }, [String(item.value)]),
-            View({ class: "content-row-stat-label" }, [item.label]),
-          ],
-        );
-      },
-    }),
-  ];
+    engagement_items.length
+      ? View({ class: "content-row-engagement" }, [
+          For({
+            each: engagement_items,
+            render(item) {
+              return Tag(
+                {
+                  name: "content-row-engagement-item",
+                  class: `content-row-engagement-item content-row-engagement-${item.key}`,
+                  attributes: { title: `${item.label}：${item.value}` },
+                },
+                [
+                  View({ class: "content-row-engagement-value" }, [
+                    format_engagement_count(item.value),
+                  ]),
+                  View({ class: "content-row-engagement-label" }, [item.label]),
+                ],
+              );
+            },
+          }),
+        ])
+      : null,
+    ...items.map((item) =>
+      Tag(
+        {
+          name: "content-row-stat",
+          class: `content-row-stat content-row-stat-${item.key}`,
+          attributes: { title: `${item.label}：${item.value}` },
+        },
+        [
+          View({ class: "content-row-stat-value" }, [String(item.value)]),
+          View({ class: "content-row-stat-label" }, [item.label]),
+        ],
+      ),
+    ),
+  ].filter(Boolean);
 }
 
 function ContentRowMain(props) {
@@ -529,7 +564,7 @@ function ContentPageBody(props) {
       {
         name: "statistics",
         title: "统计",
-        width: 200,
+        width: 320,
         cellClass: "content-row-stats",
         render(content) {
           return ContentRowStatistics({

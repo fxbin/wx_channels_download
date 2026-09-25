@@ -241,6 +241,13 @@ function content_statistics(content) {
   return {
     task_statuses: Array.from(task_statuses.values()),
     files: Math.max(0, number_or_default(source.file_count, 0)),
+    engagement: {
+      play: Math.max(0, number_or_default(source.view_count, 0)),
+      like: Math.max(0, number_or_default(source.like_count, 0)),
+      comment: Math.max(0, number_or_default(source.comment_count, 0)),
+      share: Math.max(0, number_or_default(source.share_count, 0)),
+      collect: Math.max(0, number_or_default(source.collect_count, 0)),
+    },
   };
 }
 

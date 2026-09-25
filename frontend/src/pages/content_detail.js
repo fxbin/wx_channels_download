@@ -888,6 +888,50 @@ function ContentDetailDescription(props) {
   ]);
 }
 
+function format_content_count(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return "0";
+  if (n >= 100000000) return `${(n / 100000000).toFixed(1).replace(/\.0$/, "")}亿`;
+  if (n >= 10000) return `${(n / 10000).toFixed(1).replace(/\.0$/, "")}万`;
+  return String(Math.round(n));
+}
+
+function ContentDetailEngagement(props) {
+  const content = props.content || {};
+  const items = [
+    {
+      key: "play",
+      label: "播放",
+      value: content.view_count,
+      hint: "平台未公开时为根据赞/评/转/藏预估",
+    },
+    { key: "like", label: "点赞", value: content.like_count },
+    { key: "comment", label: "评论", value: content.comment_count },
+    { key: "share", label: "转发", value: content.share_count },
+    { key: "collect", label: "收藏", value: content.collect_count },
+  ].filter((item) => Number(item.value) > 0);
+  if (!items.length) return null;
+  return View({ class: "content-detail-engagement" }, [
+    For({
+      each: items,
+      render(item) {
+        return View(
+          {
+            class: `content-detail-engagement-item content-detail-engagement-${item.key}`,
+            attributes: item.hint ? { title: item.hint } : {},
+          },
+          [
+            View({ class: "content-detail-engagement-value" }, [
+              format_content_count(item.value),
+            ]),
+            View({ class: "content-detail-engagement-label" }, [item.label]),
+          ],
+        );
+      },
+    }),
+  ]);
+}
+
 function ContentDetailMain(props) {
   const vm$ = props.store;
   const content = props.content;
@@ -929,6 +973,7 @@ function ContentDetailMain(props) {
           Timeless.Icon({ name: "clock3", size: 14 }),
           `发布于 ${vm$.methods.formatTime(content.publish_time)}`,
         ]),
+        ContentDetailEngagement({ content }),
       ].filter(Boolean)),
     ].filter(Boolean)),
     ContentDetailSection({
